@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS arc_files;
+CREATE TABLE arc_files (
+   url TEXT NOT NULL,
+   parsed BOOLEAN NOT NULL DEFAULT FALSE,
+   UNIQUE(url(255))
+);
