@@ -1,6 +1,6 @@
 package edu.calpoly.similarity;
 
-public class EditDistanceComparison
+public class EditDistanceComparison implements ComparisonMetric
 {
     /**
      *     * 0 = 100% different
