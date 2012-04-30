@@ -19,7 +19,7 @@ public class EditDistanceComparison implements ComparisonMetric
         }
 
         EditDistance ed = new EditDistance();
-        return (1000.0 - ed.Solve(code1,code2))/1000.0;
+        return (1000.0 - ed.distance(code1,code2))/1000.0;
     }
 
     
