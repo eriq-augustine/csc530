@@ -69,7 +69,7 @@ public class EditDistance {
                 FillCell(i, j);
             }
         //PrintArray();
-        PrintResult();
+        //PrintResult();
         return 0;
     }
 
