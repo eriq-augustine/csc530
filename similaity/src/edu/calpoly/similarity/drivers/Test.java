@@ -1,4 +1,4 @@
-package edu.calpoly.similarity;
+package edu.calpoly.similarity.drivers;
 
 import java.io.File;
 import java.io.Reader;
