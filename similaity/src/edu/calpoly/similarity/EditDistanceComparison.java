@@ -13,7 +13,7 @@ public class EditDistanceComparison implements ComparisonMetric
             return 0;
         }
 
-        if (code1.length() > 1000 || code2.length() > 1000)
+        if (code1.length() > 10000 || code2.length() > 10000)
         {
             return -1;
         }
