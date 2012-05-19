@@ -12,8 +12,8 @@
         <pathelement location="bin"/>
         <pathelement location="lib/mysql-connector-java-5.1.15-bin.jar"/>
         <pathelement location="lib/commons-logging-1.1.jar"/>
-        <pathelement location="lib/js-14.jar"/>
-        <pathelement location="lib/yuicompressor-2.4.8pre.jar"/>
+        <!-- <pathelement location="lib/rhino-1.7R2.jar"/> -->
+        <pathelement location="lib/yuicompressor-2.4.7.jar"/>
     </path>
     <target name="doc">
       <mkdir dir="doc"/>

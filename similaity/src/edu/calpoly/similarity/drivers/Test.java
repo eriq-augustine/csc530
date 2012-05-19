@@ -13,17 +13,19 @@ public class Test
 {
    public static void main(String[] args) throws Exception
    {
-      System.err.println("START");
+      if (args.length != 1)
+      {
+         System.err.println("Give js file as single param");
+         System.exit(1);
+      }
 
-      String code = "var x = 3 + 4;";
-      File file = new File("examples/NervousText.js");
+      File file = new File(args[0]);
       Reader reader = new FileReader(file);
 
       CompilerEnvirons comEnvs = new CompilerEnvirons();
       ErrorReporter errReporter = comEnvs.getErrorReporter();
 
       Parser parse = new Parser(comEnvs, errReporter);
-      //AstRoot root = parse.parse(code, "http://www.foo.com/bar", 1);
       AstRoot root = parse.parse(reader, file.getCanonicalPath(), 0);
       String tree = root.debugPrint();
       System.out.println(tree);
