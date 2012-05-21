@@ -2,6 +2,7 @@ package edu.calpoly.similarity.drivers;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.ResultSet;
 
@@ -42,63 +43,95 @@ public class GetEasyFunctions
    public static final String DB_PASS = "ILoveData530";
    public static final String DB_URL = "jdbc:mysql://127.0.0.1:3306/js?autoReconnect=true";
    public static final String DB_DRIVER = "com.mysql.jdbc.Driver";
+
    public static final int PAGE_SIZE = 100;
    public static final int TIMEOUT_MS = 500;
+   public static final int MAX_PARAMS = 3;
 
    public static final String TOP_SITES_TABLE = "top_sites";
    public static final String TOP_CODE_TABLE = "top_code";
+   public static final String EASY_FUNCTIONS_TABLE = "easy_functions";
    
    public static final String CODE_TABLE = "code";
 
-   public static final int NUM_FUNCTIONS = 100;
+   public static final int NUM_FUNCTIONS = 10000;
 
-   private static ExecutorService executor = Executors.newSingleThreadExecutor();
-
-   private static Pattern pattern = 
-    Pattern.compile("(jquery)|(document)|(window)|(\\$)", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+   private ExecutorService executor;
+   private Pattern pattern;
+   private Connection conn;
+   private int numEasyFunctions;
 
    public static void main(String[] args)
    {
-      List<String> easyFunctions = new ArrayList<String>();
+      GetEasyFunctions easy = new GetEasyFunctions();
+      easy.run();
+      System.exit(0);
+   }
+
+   public void run()
+   {
       int page = 0;
       boolean done = false;
+               
+      CompilerEnvirons comEnvs = new CompilerEnvirons();
+      ErrorReporter errReporter = comEnvs.getErrorReporter();
+      Parser parse;
 
-      while (easyFunctions.size() < NUM_FUNCTIONS)
+      AstRoot root;
+      List<FunctionNode> funNodes = new ArrayList<FunctionNode>();
+
+      String code = null;
+      int id;
+
+      List<Integer> ids = new ArrayList<Integer>();
+      List<String> codes = new ArrayList<String>();
+
+      while (numEasyFunctions < NUM_FUNCTIONS)
       {
-         List<String> codes = getCode(page);
+         ids.clear();
+         codes.clear();
+         getCode(page, ids, codes);
 
          if (codes.size() == 0)
          {
-            System.out.println("Breaking early, done with db.");
-            System.exit(0);
+            System.err.println("Breaking early, done with db.");
+            return;
          }
 
          page++;
 
-         for (String code : codes)
+         for (int i = 0; i < codes.size(); i++)
          {
+            code = codes.get(i);
+            id = ids.get(i).intValue();
+            funNodes.clear();
+
             try
             {
-               CompilerEnvirons comEnvs = new CompilerEnvirons();
-               ErrorReporter errReporter = comEnvs.getErrorReporter();
-
-               Parser parse = new Parser(comEnvs, errReporter);
-               AstRoot root = parse.parse(code, "", 0);
-               List<FunctionNode> funNodes = new ArrayList<FunctionNode>();
+               parse = new Parser(comEnvs, errReporter);
+               root = parse.parse(code, "", 0);
                Fuzzer.collectFunctions(root, funNodes);
+               String funCode = null;
 
                for (FunctionNode funNode : funNodes)
                {
-                  String funCode = funNode.toSource();
+                  if (funNode.getParams().size() > MAX_PARAMS)
+                  {
+                     continue;
+                  }
+
+                  funCode = funNode.toSource();
                   
                   if (isValid(funCode) &&
                       hasSuccessfulRun(funCode, funNode.getParams().size()))
                   {
-                     easyFunctions.add(funCode);
+                     numEasyFunctions++;
+                     insertFunction(id, funCode);
 
-                     System.err.println(funCode + "\n\n");
+                     System.out.println(funCode + "\n\n");
+                     System.err.println("A - " + id);
 
-                     if (easyFunctions.size() == NUM_FUNCTIONS)
+                     if (numEasyFunctions == NUM_FUNCTIONS)
                      {
                         done = true;
                         break;
@@ -106,9 +139,13 @@ public class GetEasyFunctions
                   }
                   else
                   {
-                     System.out.println("Rejected");
+                     System.err.println("R - " + id);
                   }
+                  
+                  funCode = null;
                }
+
+               root = null;
             }
             catch (Exception ex)
             {
@@ -120,18 +157,30 @@ public class GetEasyFunctions
             }
          }
       }
-
-      /*
-      for (String easyFunction : easyFunctions)
-      {
-         System.out.println(easyFunction + "\n\n");
-      }
-      */
    }
 
-   private static boolean hasSuccessfulRun(String code, int numParams)
+   public GetEasyFunctions()
    {
-      final String finalCode = new String(code);
+      numEasyFunctions = 0;
+      pattern = 
+         Pattern.compile("(jquery)|(document)|(window)|(\\$)", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+      executor = Executors.newSingleThreadExecutor();
+      try
+      {
+         Class.forName(DB_DRIVER);
+         conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+      }
+      catch (Exception ex)
+      {
+         System.err.println("Error establishing DB connection.");
+         ex.printStackTrace(System.err);
+         System.exit(1);
+      }
+   }
+
+   private boolean hasSuccessfulRun(String code, int numParams)
+   {
+      final String finalCode = code;
       final int finalNumParams = numParams;
 
       Future<Boolean> future = executor.submit(new Callable<Boolean>() {
@@ -152,18 +201,21 @@ public class GetEasyFunctions
             return recursiveRunCheck(context, fun, scope, thisObj, args, choosers, 0);
          }
       });
-   
+  
+      boolean rtn = false;
       try
       {
-         return future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+         rtn = future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+         future = null;
       }
       catch (Exception ex)
       {
-         return false;
       }
+
+      return rtn;
    }
 
-   private static boolean recursiveRunCheck(Context context, Function fun, Scriptable scope, Scriptable thisObj,
+   private boolean recursiveRunCheck(Context context, Function fun, Scriptable scope, Scriptable thisObj,
     Object[] args, ValueIterator[] choosers, int currentParam)
    {
       if (currentParam == args.length)
@@ -179,6 +231,7 @@ public class GetEasyFunctions
       }
       else
       {
+         choosers[currentParam] = null;
          choosers[currentParam] = new SimpleValueIterator();
          for (Object value : choosers[currentParam])
          {
@@ -193,44 +246,57 @@ public class GetEasyFunctions
       return false;
    }
 
-   private static boolean isValid(String code)
+   private boolean isValid(String code)
    {
       Matcher m = pattern.matcher(code);
-      return !m.find();
+      boolean rtn = !m.find();
+      m = null;
+      return rtn;
    }
 
-   private static List<String> getCode(int page)
+   private void insertFunction(int id, String code)
    {
-      List<String> rtn = new ArrayList<String>();
-      /*
-      String query = String.format("SELECT code" + 
-       " FROM %s c JOIN %s s ON (c.origin = s.id)" +
-       " ORDER BY s.rank, c.url, c.position" +
-       " LIMIT %d, %d",
-       TOP_CODE_TABLE, TOP_SITES_TABLE,
-       (PAGE_SIZE * page), PAGE_SIZE);
-       */
-      String query = String.format("SELECT code" + 
-       " FROM %s" +
-       " ORDER BY time_crawled" +
-       " LIMIT %d, %d",
-       CODE_TABLE,
-       (PAGE_SIZE * page), PAGE_SIZE);
-      Connection conn = null;
-      Statement stmt = null;
-      ResultSet res = null;
+      String insert = String.format(
+       "INSERT IGNORE INTO %s (code_id, code) VALUES (%d, ?)",
+       EASY_FUNCTIONS_TABLE, id);
+      PreparedStatement pStmt = null;
 
       try
       {
-         Class.forName(DB_DRIVER);
-         conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+         pStmt = conn.prepareStatement(insert);
+         pStmt.setString(1, code);
+         pStmt.execute();
       }
       catch (Exception ex)
       {
-         System.err.println("Error establishing DB connection.");
-         ex.printStackTrace(System.err);
-         System.exit(1);
+         System.err.println("Error inserting (" + id + ", " + code + ") into db.");
       }
+      finally
+      {
+         if (pStmt != null)
+         {
+            try
+            {
+               pStmt.close();
+            }
+            catch (Exception ex)
+            {
+            }
+         }
+         pStmt = null;
+      }
+   }
+
+   private void getCode(int page, List<Integer> ids, List<String> codes)
+   {
+      String query = String.format("SELECT id, code" + 
+       " FROM %s" +
+       " ORDER BY id" +
+       " LIMIT %d, %d",
+       CODE_TABLE,
+       (PAGE_SIZE * page), PAGE_SIZE);
+      Statement stmt = null;
+      ResultSet res = null;
 
       try
       {
@@ -239,7 +305,8 @@ public class GetEasyFunctions
 
          while (res.next())
          {
-            rtn.add(res.getString(1));
+            ids.add(res.getInt(1));
+            codes.add(res.getString(2));
          }
       }
       catch (Exception ex)
@@ -266,8 +333,8 @@ public class GetEasyFunctions
             System.err.println("Error Closing DB.");
             ex.printStackTrace(System.err);
          }
+         res = null;
+         stmt = null;
       }
-
-      return rtn;
    }
 }

@@ -36,12 +36,16 @@ public class CompressDB
    public static final String DB_DRIVER = "com.mysql.jdbc.Driver";
    public static final int PAGE_SIZE = 1000;
 
-   public static final String MIN_CODE_TABLE = "min_top_code";
-
+   /*
    public static final String TOP_SITES_TABLE = "top_sites";
    public static final String TOP_CODE_TABLE = "top_code";
 
    public static final String CODE_TABLE = "code"; 
+   public static final String MIN_CODE_TABLE = "min_top_code";
+   */
+
+   public static final String CODE_TABLE = "code";
+   public static final String MIN_CODE_TABLE = "min_code";
 
    private static MessageDigest md = null;
 
@@ -175,16 +179,8 @@ public class CompressDB
        " FROM %s" +
        " ORDER BY id" +
        " LIMIT %d, %d",
-       TOP_CODE_TABLE,
-       (PAGE_SIZE * page), PAGE_SIZE);
-      /*
-      String query = String.format("SELECT code" + 
-       " FROM %s" +
-       " ORDER BY time_crawled" +
-       " LIMIT %d, %d",
        CODE_TABLE,
        (PAGE_SIZE * page), PAGE_SIZE);
-       */
       Connection conn = null;
       Statement stmt = null;
       ResultSet res = null;

@@ -10,6 +10,12 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import org.mozilla.javascript.Node;
 import org.mozilla.javascript.Parser;
 import org.mozilla.javascript.ast.AstNode;
@@ -25,6 +31,10 @@ import org.mozilla.javascript.Function;
 
 public class Fuzzer
 {
+   private static ExecutorService executor = Executors.newSingleThreadExecutor();
+
+   public static final int TIMEOUT_MS = 1000;
+
    public static void main(String[] argv) throws Exception
    {
       if (argv.length != 1)
@@ -120,16 +130,54 @@ public class Fuzzer
    {
       if (currentParam == args.length)
       {
-         Object result = null;
+         final ExecutionContext final_execContext = execContext;
+         final Object[] final_args = args;
 
+         Future<Object> future = executor.submit(new Callable<Object>() {
+            public Object call() throws Exception
+            {
+               Object result = null;
+
+               //TEST
+               /*
+               System.out.println("Trying: ");
+               for (Object arg : final_args)
+               {
+                  System.out.print(arg + ", ");
+               }
+               */
+
+               try
+               {
+                  result = final_execContext.function.call(
+                   final_execContext.context, final_execContext.scope,
+                   final_execContext.thisObj, final_args);
+               }
+               catch (Exception ex)
+               {
+                  result = new FuzzRuntimeError(ex);
+               }
+
+               //TEST
+               //System.out.println("\n Got: " + result);
+
+               return result;
+            }
+         });
+
+         Object result = null;
          try
          {
-            result = execContext.function.call(
-             execContext.context, execContext.scope, execContext.thisObj, args);
+            result = future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+         }
+         catch (java.util.concurrent.TimeoutException timeEx)
+         {
+            result = timeEx;
          }
          catch (Exception ex)
          {
-            result = new FuzzRuntimeError(ex);
+            //TEST
+            System.err.println(ex);
          }
          
          res.put(new ArgList(args), result);

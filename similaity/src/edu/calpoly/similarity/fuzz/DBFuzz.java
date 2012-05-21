@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
+import java.io.FileReader;
+import java.io.BufferedReader;
+
 import org.mozilla.javascript.Node;
 import org.mozilla.javascript.Parser;
 import org.mozilla.javascript.ast.AstNode;
@@ -36,6 +39,7 @@ public class DBFuzz
    public static void main(String[] args)
    {
       List<String> codes = getCode(NUM_CODE);
+      int count = 0;
 
       Map<Integer, List<FunctionInfo>> fuzzResults = new HashMap<Integer, List<FunctionInfo>>();
 
@@ -52,14 +56,19 @@ public class DBFuzz
             Fuzzer.collectFunctions(root, funNodes);
 
             //TEST
-            System.out.println(root.debugPrint());
-            System.out.println("\n\n-----------------\n");
-            System.err.println(code);
+            System.err.println("Got " + funNodes.size() + " functions.");
 
             for (FunctionNode funNode : funNodes)
             {
+               //TEST
+               System.err.println("TEST -- begin fuzz on " + count);
+
                Map<Fuzzer.ArgList, Object> results = Fuzzer.fuzz(funNode);
-               FunctionInfo info = new FunctionInfo(results, code);
+               FunctionInfo info = new FunctionInfo(results, funNode.toSource());
+
+               //TEST
+               System.err.println("TEST -- end   fuzz on " + count);
+               count++;
 
                int numParams = funNode.getParams().size();
                if (!fuzzResults.containsKey(numParams))
@@ -68,17 +77,11 @@ public class DBFuzz
                }
 
                fuzzResults.get(numParams).add(info);
-
-               //TEST
-               System.out.println(funNode.debugPrint());
             }
-            
-            //TEST
-            System.exit(0);
          }
          catch (Exception ex)
          {
-            //Error
+            ex.printStackTrace(System.err);
          }
       }
 
@@ -91,12 +94,13 @@ public class DBFuzz
 
             for (Map.Entry<Fuzzer.ArgList, Object> fuzzRes : info.fuzzRes.entrySet())
             {
-               System.out.println(fuzzRes.getKey() + " -- " + fuzzRes.getValue());
+               System.err.println(fuzzRes.getKey() + " -- " + fuzzRes.getValue());
             }
          }
       }
 
       //TEST
+      System.exit(0);
    }
 
    private static class FunctionInfo
@@ -115,6 +119,33 @@ public class DBFuzz
       }
    }
 
+   private static List<String> getCode(int num)
+   {
+      List<String> rtn = new ArrayList<String>();
+      
+      try
+      {
+         BufferedReader reader =
+          new BufferedReader(new FileReader("examples/easyTopFunctions.js"));
+
+         String res = "";
+         String line;
+         while ((line = reader.readLine()) != null)
+         {
+            res += line;
+         }
+         rtn.add(res);
+      }
+      catch (Exception ex)
+      {
+         System.err.println("Error reading file.");
+         ex.printStackTrace(System.err);
+      }
+
+      return rtn;
+   }
+
+   /*
    private static List<String> getCode(int num)
    {
       List<String> rtn = new ArrayList<String>();
@@ -178,4 +209,5 @@ public class DBFuzz
 
       return rtn;
    }
+   */
 }
