@@ -14,6 +14,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 import org.mozilla.javascript.Node;
@@ -32,8 +33,10 @@ import org.mozilla.javascript.Function;
 public class Fuzzer
 {
    private static ExecutorService executor = Executors.newSingleThreadExecutor();
+   //private static ExecutorService executor = Executors.newFixedThreadPool(1);
 
    public static final int TIMEOUT_MS = 1000;
+   public static final int MAX_STACK_DEPTH = 100;
 
    public static void main(String[] argv) throws Exception
    {
@@ -134,6 +137,7 @@ public class Fuzzer
          final Object[] final_args = args;
 
          Future<Object> future = executor.submit(new Callable<Object>() {
+         //FutureTask<Object> future = new FutureTask(new Callable<Object>() {
             public Object call() throws Exception
             {
                Object result = null;
@@ -173,19 +177,28 @@ public class Fuzzer
          catch (java.util.concurrent.TimeoutException timeEx)
          {
             result = timeEx;
+            executor = Executors.newSingleThreadExecutor();
          }
          catch (Exception ex)
          {
+            result = ex;
             //TEST
             System.err.println(ex);
+         }
+         finally
+         {
+            if (future != null)
+            {
+               future.cancel(true);
+            }
          }
          
          res.put(new ArgList(args), result);
       }
       else
       {
-         choosers[currentParam] = new SimpleValueIterator();
-         //choosers[currentParam] = new FullValueIterator();
+         //choosers[currentParam] = new SimpleValueIterator();
+         choosers[currentParam] = new FullValueIterator();
          for (Object value : choosers[currentParam])
          {
             args[currentParam] = value;
@@ -198,9 +211,25 @@ public class Fuzzer
    {
       public Exception ex;
 
+      public FuzzRuntimeError()
+      {
+         ex = null;
+      }
+
       public FuzzRuntimeError(Exception ex)
       {
          this.ex = ex;
+      }
+
+      public boolean equals(Object otherObj)
+      {
+         if (otherObj == null || !(otherObj instanceof FuzzRuntimeError))
+         {
+            return false;
+         }
+
+         FuzzRuntimeError other = (FuzzRuntimeError)otherObj;
+         return (ex == null && other == null) || (ex.equals(other.ex));
       }
    }
 
@@ -276,13 +305,20 @@ public class Fuzzer
    public static ExecutionContext prepFunction(FunctionNode funNode)
    {
       ExecutionContext context = new ExecutionContext();
+
       context.funNode = funNode;
       context.paramNodes = funNode.getParams();
+
       context.context = Context.enter();
+      context.context.setOptimizationLevel(-1);
+      context.context.setLanguageVersion(Context.VERSION_1_5);
+      context.context.setMaximumInterpreterStackDepth(MAX_STACK_DEPTH);
+
       context.scope = context.context.initStandardObjects();
       context.thisObj = context.context.newObject(context.scope);
       context.source = funNode.toSource();
-      context.function = context.context.compileFunction(context.scope, context.source, "SourceName", 0, null);
+      context.function = context.context.compileFunction(context.scope, context.source, "", 0, null);
+
       return context;
    }
 

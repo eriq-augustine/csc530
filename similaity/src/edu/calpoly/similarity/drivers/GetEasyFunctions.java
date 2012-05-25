@@ -34,7 +34,6 @@ import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 
-import org.mozilla.javascript.tools.shell.Global;
 import org.mozilla.javascript.ContextFactory;
 
 public class GetEasyFunctions
@@ -47,6 +46,7 @@ public class GetEasyFunctions
    public static final int PAGE_SIZE = 100;
    public static final int TIMEOUT_MS = 500;
    public static final int MAX_PARAMS = 3;
+   public static final int MAX_STACK_DEPTH = 100;
 
    public static final String TOP_SITES_TABLE = "top_sites";
    public static final String TOP_CODE_TABLE = "top_code";
@@ -126,7 +126,7 @@ public class GetEasyFunctions
                       hasSuccessfulRun(funCode, funNode.getParams().size()))
                   {
                      numEasyFunctions++;
-                     insertFunction(id, funCode);
+                     insertFunction(id, funCode, funNode.getParams().size());
 
                      System.out.println(funCode + "\n\n");
                      System.err.println("A - " + id);
@@ -180,12 +180,82 @@ public class GetEasyFunctions
 
    private boolean hasSuccessfulRun(String code, int numParams)
    {
+      Context context = Context.enter();
+      context.setOptimizationLevel(-1);
+      context.setLanguageVersion(Context.VERSION_1_5);
+      context.setMaximumInterpreterStackDepth(MAX_STACK_DEPTH);
+
+      Scriptable scope = context.initStandardObjects();
+      Function fun = context.compileFunction(scope, code, "", 0, null);
+      Scriptable thisObj = context.newObject(scope);
+      Object[] args = new Object[numParams];
+      ValueIterator[] choosers = new ValueIterator[numParams];
+
+      boolean rtn = recursiveRunCheck(context, fun, scope, thisObj, args, choosers, 0);
+
+      //return testRun(code, numParams);
+
+      choosers = null;
+      args = null;
+      thisObj = null;
+      fun = null;
+      scope = null;
+      Context.exit();
+
+      return rtn;
+   }
+
+   /*
+   public boolean testRun(Context context, Function fun, Scriptable scope, Scriptable thisObj,
+    Object[] args, ValueIterator[] choosers, int currentParam)
+   */
+   public boolean testRun(String code, int numParams)
+   {
+      Context context = Context.enter();
+      /*
+      context.setLanguageVersion(Context.VERSION_1_5);
+      */
+      context.setOptimizationLevel(-1);
+      context.setMaximumInterpreterStackDepth(100);
+
+      ScriptableObject scope = context.initStandardObjects();
+      Function fun = context.compileFunction(scope, code, "", 0, null);
+      Scriptable thisObj = context.newObject(scope);
+      Object[] args = new Object[numParams];
+
+      for (int i = 0; i < 1000; i++)
+      {
+         /*
+         Context newContext = Context.enter();
+         Scriptable newScope = newContext.initStandardObjects();
+         Scriptable newThisObj = newContext.newObject(newScope);
+         fun.call(newContext, newScope, newThisObj, args);
+         */
+         fun.call(context, scope, thisObj, args);
+
+         //TEST
+         //System.out.println(scope.size());
+      }
+
+      args = null;
+      thisObj = null;
+      fun = null;
+      scope = null;
+      context.exit();
+
+      return false;
+   }
+
+
+   private boolean hasSuccessfulRunTimeout(String code, int numParams)
+   {
       final String finalCode = code;
       final int finalNumParams = numParams;
 
       Future<Boolean> future = executor.submit(new Callable<Boolean>() {
          public Boolean call() throws Exception
          {
+            /*
             Global global = new Global();
             Context context = ContextFactory.getGlobal().enterContext();
             global.init(context);
@@ -199,6 +269,8 @@ public class GetEasyFunctions
             ValueIterator[] choosers = new ValueIterator[finalNumParams];
 
             return recursiveRunCheck(context, fun, scope, thisObj, args, choosers, 0);
+            */
+            return false;
          }
       });
   
@@ -254,11 +326,11 @@ public class GetEasyFunctions
       return rtn;
    }
 
-   private void insertFunction(int id, String code)
+   private void insertFunction(int id, String code, int numParams)
    {
       String insert = String.format(
-       "INSERT IGNORE INTO %s (code_id, code) VALUES (%d, ?)",
-       EASY_FUNCTIONS_TABLE, id);
+       "INSERT IGNORE INTO %s (code_id, code, num_params) VALUES (%d, ?, %d)",
+       EASY_FUNCTIONS_TABLE, id, numParams);
       PreparedStatement pStmt = null;
 
       try
@@ -291,6 +363,7 @@ public class GetEasyFunctions
    {
       String query = String.format("SELECT id, code" + 
        " FROM %s" +
+       " WHERE id > 23544" +
        " ORDER BY id" +
        " LIMIT %d, %d",
        CODE_TABLE,
