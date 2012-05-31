@@ -35,6 +35,7 @@ public class Fuzzer
    private static ExecutorService executor = Executors.newSingleThreadExecutor();
    //private static ExecutorService executor = Executors.newFixedThreadPool(1);
 
+   public static final int PAGE_SIZE = 1000;
    public static final int TIMEOUT_MS = 1000;
    public static final int MAX_STACK_DEPTH = 100;
 
@@ -107,7 +108,104 @@ public class Fuzzer
       finally
       {
       }
+
+      System.exit(0);
    }
+
+   // Don't return anything; insert in DB.
+   public static void dbFuzz(FunctionNode funNode, DBFuzz dbFuzzer, int id)
+   {
+      ExecutionContext execContext = prepFunction(funNode);
+      dbFuzz(execContext, dbFuzzer, id);
+      execContext.context.exit();
+   }
+
+   public static void dbFuzz(ExecutionContext context, DBFuzz dbFuzzer, int id)
+   {
+      Object[] args = new Object[context.paramNodes.size()];
+      ValueIterator[] choosers = new ValueIterator[args.length];
+      Map<ArgList, Object> res = new HashMap<ArgList, Object>(PAGE_SIZE);
+      recursiveDbFuzz(context, res, args, choosers, 0, dbFuzzer, id);
+
+      if (res.size() != 0)
+      {
+         dbFuzzer.insertResults(id, res);
+      }
+   }
+
+   private static void recursiveDbFuzz(ExecutionContext execContext,
+    Map<ArgList, Object> res, Object[] args,
+    ValueIterator[] choosers, int currentParam, DBFuzz dbFuzzer, int id)
+   {
+      if (currentParam == args.length)
+      {
+         final ExecutionContext final_execContext = execContext;
+         final Object[] final_args = args;
+
+         Future<Object> future = executor.submit(new Callable<Object>() {
+            public Object call() throws Exception
+            {
+               Object result = null;
+
+               try
+               {
+                  result = final_execContext.function.call(
+                   final_execContext.context, final_execContext.scope,
+                   final_execContext.thisObj, final_args);
+               }
+               catch (Exception ex)
+               {
+                  result = new FuzzRuntimeError(ex);
+               }
+
+               return result;
+            }
+         });
+
+         Object result = null;
+         try
+         {
+            result = future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+         }
+         catch (java.util.concurrent.TimeoutException timeEx)
+         {
+            result = timeEx;
+            executor = Executors.newSingleThreadExecutor();
+         }
+         catch (Exception ex)
+         {
+            result = ex;
+            //TEST
+            System.err.println(ex);
+         }
+         finally
+         {
+            if (future != null)
+            {
+               future.cancel(true);
+            }
+         }
+         
+         res.put(new ArgList(args), result);
+
+         if (res.size() >= PAGE_SIZE)
+         {
+            dbFuzzer.insertResults(id, res);
+            res.clear();
+         }
+      }
+      else
+      {
+         //choosers[currentParam] = new SimpleValueIterator();
+         choosers[currentParam] = new FullValueIterator();
+         for (Object value : choosers[currentParam])
+         {
+            args[currentParam] = value;
+            recursiveDbFuzz(execContext, res, args, choosers, currentParam + 1, dbFuzzer, id);
+         }
+      }
+   }
+
 
    public static Map<ArgList, Object> fuzz(FunctionNode funNode)
    {
@@ -198,7 +296,8 @@ public class Fuzzer
       else
       {
          //choosers[currentParam] = new SimpleValueIterator();
-         choosers[currentParam] = new FullValueIterator();
+         //choosers[currentParam] = new FullValueIterator();
+         choosers[currentParam] = new PosterValueIterator();
          for (Object value : choosers[currentParam])
          {
             args[currentParam] = value;

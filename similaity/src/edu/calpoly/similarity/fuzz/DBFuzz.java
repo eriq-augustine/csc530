@@ -104,30 +104,10 @@ public class DBFuzz
 
                for (FunctionNode funNode : funNodes)
                {
-                  Map<Fuzzer.ArgList, Object> results = Fuzzer.fuzz(funNode);
+                  Fuzzer.dbFuzz(funNode, this, ids.get(i).intValue());
                   //FunctionInfo info = new FunctionInfo(ids.get(i).intValue(), results, funNode.toSource());
                   //FunctionInfo info = new FunctionInfo(ids.get(i).intValue(), results, "");
-                  insertResults(ids.get(i), results);
-
-                  /*
-                  //TEST
-                  for (Map.Entry<Fuzzer.ArgList, Object> res : results.entrySet())
-                  {
-                     if (res.getValue() == null)
-                     {
-                        System.err.println(res.getKey() + " -- (" +
-                         "null):" + res.getValue());
-                     }
-                     else
-                     {
-                        System.err.println(res.getKey() + " -- (" +
-                         res.getValue().getClass().getSimpleName() + "):" + res.getValue());
-                     }
-                  }
-                  System.err.println();
-                  */
-
-                  //fuzzResults.add(info);
+                  //insertResults(ids.get(i), results);
                }
             }
             catch (Exception ex)
@@ -285,7 +265,7 @@ public class DBFuzz
       return rtn;
    }
 
-   private static String stringify(NativeObject obj)
+   public static String stringify(NativeObject obj)
    {
       String rtn = "";
 
@@ -304,7 +284,7 @@ public class DBFuzz
       return rtn.replaceFirst("-$", "");
    }
 
-   private static String stringify(NativeArray arr)
+   public static String stringify(NativeArray arr)
    {
       String rtn = "";
 
@@ -316,7 +296,7 @@ public class DBFuzz
       return rtn.replaceFirst("-$", "");
    }
 
-   private void insertResults(int id, Map<Fuzzer.ArgList, Object> results)
+   public void insertResults(int id, Map<Fuzzer.ArgList, Object> results)
    {
       String insert = String.format("REPLACE INTO %s" +
        " (code_id, arg_sig, result_type, result)" + 
