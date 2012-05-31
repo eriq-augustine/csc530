@@ -20,6 +20,9 @@ import org.mozilla.javascript.ast.TryStatement;
 
 public class TryCatchOptimization implements OptimizationMetric {
 
+	public int totalOptimizations = 0;
+	public int totalPotentialOptimizations = 0;
+	
 	@Override
 	public List<AstNode> isOptimizable(AstRoot code) {
 		// Create a new List of AstNodes
@@ -53,15 +56,21 @@ public class TryCatchOptimization implements OptimizationMetric {
 		tryNodeVisitor.propList = propList;
 		tryBlock.visit(tryNodeVisitor);
 		
-		System.out.println("List of Get Properties:");
-		for (GetPropPair prop : propList) {
-			System.out.println(prop.getObject() + " - " + prop.getProperty());
-		}
-		System.out.println();
+//		System.out.println("List of Get Properties:");
+//		for (GetPropPair prop : propList) {
+//			System.out.println(prop.getObject() + " - " + prop.getProperty());
+//		}
+//		System.out.println();
 		
-		// Add the null checker function before the TCF Block
-		tryStmt.getParent().addChildBefore(createNullCheckerFunction(), tryStmt);
-		tryStmt.getParent().replaceChild(tryStmt, createNullCheck(propList, tryStmt));
+		// Null Checks
+		AstNode nullChecker = createNullCheckerFunction();
+		AstNode ifNull = createNullCheck(propList, tryStmt);
+		
+		if (nullChecker != null && ifNull != null) {
+			// Add the null checker function before the TCF Block
+			tryStmt.getParent().addChildBefore(nullChecker, tryStmt);
+			tryStmt.getParent().replaceChild(tryStmt, ifNull);
+		}
 	}
 	
 	class TryNodeVisitor implements NodeVisitor {
@@ -140,12 +149,14 @@ public class TryCatchOptimization implements OptimizationMetric {
 			
 			switch (node.getType()) {
 				case Token.TRY:
-					System.out.println("-------");
+					totalOptimizations++;
+					System.out.println("*****");
 					System.out.println(node.toSource());
-					System.out.print(node.debugPrint());
+//					System.out.print(node.debugPrint());
 
 					TryStatement tryNode = (TryStatement)node;
 					if (isOptimizable(tryNode)) {
+						totalPotentialOptimizations++;
 						optimizableNodes.add(tryNode);
 					}	
 					
@@ -195,6 +206,8 @@ public class TryCatchOptimization implements OptimizationMetric {
 	}
 		
 	private AstNode createNullCheck(List<GetPropPair> propList, AstNode tryNode) {
+		if (propList.isEmpty()) return null;
+		
 		String isNotNull = "";
 
 		for (int i = 0; i < propList.size(); i++) {
@@ -204,17 +217,22 @@ public class TryCatchOptimization implements OptimizationMetric {
 			}
 		}
 		
-		String nullCheck = "if (" + isNotNull + ") { " + ((TryStatement)tryNode).getTryBlock().toSource() + " }";
+		String nullCheck = "if (" + isNotNull + ") " + ((TryStatement)tryNode).getTryBlock().toSource();
 
-		System.out.println(((TryStatement)tryNode).getTryBlock().debugPrint());
-		
-		// Set up the Rhino parser
-		CompilerEnvirons compilerEnvirons = new CompilerEnvirons();
-		ErrorReporter errorReporter = compilerEnvirons.getErrorReporter();
-		Parser parser = new Parser(compilerEnvirons, errorReporter);
-		AstRoot ast = parser.parse(nullCheck, null, 0);
-		
-		return (AstNode) ast.getFirstChild();
+		try {
+			// Set up the Rhino parser
+			CompilerEnvirons compilerEnvirons = new CompilerEnvirons();
+			ErrorReporter errorReporter = compilerEnvirons.getErrorReporter();
+			Parser parser = new Parser(compilerEnvirons, errorReporter);
+			AstRoot ast = parser.parse(nullCheck, null, 0);
+			
+			return (AstNode) ast.getFirstChild();
+		} catch (Exception e) {
+			System.err.println("Null If Statement Error: " + e.getMessage());
+//			System.err.println(nullCheck);
+//			System.err.println(tryNode.toSource());
+			return null;
+		}
 	}
 	
 	private AstNode createNullCheckerFunction() {
@@ -222,12 +240,17 @@ public class TryCatchOptimization implements OptimizationMetric {
 				"return data.hasOwnProperty(property) && typeof data[property] " +
 				"!= \"undefined\" && data[property] != null; }";
 		
-		// Set up the Rhino parser
-		CompilerEnvirons compilerEnvirons = new CompilerEnvirons();
-		ErrorReporter errorReporter = compilerEnvirons.getErrorReporter();
-		Parser parser = new Parser(compilerEnvirons, errorReporter);
-		AstRoot ast = parser.parse(nullCheckerFunction, null, 0);
-		
-		return (AstNode) ast.getFirstChild();
+		try {
+			// Set up the Rhino parser
+			CompilerEnvirons compilerEnvirons = new CompilerEnvirons();
+			ErrorReporter errorReporter = compilerEnvirons.getErrorReporter();
+			Parser parser = new Parser(compilerEnvirons, errorReporter);
+			AstRoot ast = parser.parse(nullCheckerFunction, null, 0);
+			
+			return (AstNode) ast.getFirstChild();
+		} catch (Exception e) {
+			System.err.println("Null Checker Function Error: " + e.getMessage());
+			return null;
+		}
 	}
 }
