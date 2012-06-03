@@ -144,18 +144,18 @@ public class TreeEditDistComparison implements ComparisonMetric
 		if (tree1.getLabel(node1) == tree2.getLabel(node2)) {
 			return 0;
 		} else {
-			return 4;
+			return 1;
 		}
 	}
 
 	@Override
 	public double insert(int node2) {
-		return 3;
+		return 1;
 	}
 
 	@Override
 	public double delete(int node1) {
-		return 2;
+		return 1;
 	}
     }   
 }
