@@ -17,16 +17,15 @@ import java.util.ArrayList;
 
 public class TreeEditDistComparison implements ComparisonMetric
 {
+   public double compare(String code1, String code2) {
+      return compare(getAST(code1), getAST(code2));
+   }
     /**
      *     * 0 = 100% different
      *     * 1 = 100% the same
      **/
-    public double compare(String code1, String code2)
+    public double compare(AstRoot root1, AstRoot root2)
     {
-        //CREATE AST's
-        AstRoot root1 = getAST(code1);
-        AstRoot root2 = getAST(code2);
-
         //CREATE NODE -> LABEL MAP
         //HashMap<String, Integer> labelMap = createLabelMap(root1, root2);
 
@@ -94,10 +93,10 @@ public class TreeEditDistComparison implements ComparisonMetric
         }
         
         LabeledTree t1 = new LabeledTree(toArr(parents1), toArr(labels1));
-	LabeledTree t2 = new LabeledTree(toArr(parents2), toArr(labels2));
-	TreeEditDistance dist = new TreeEditDistance(new ScoreImpl(t1, t2));
-	Mapping map = new Mapping(t1, t2);
-	double d = dist.calc(t1, t2, map);
+        LabeledTree t2 = new LabeledTree(toArr(parents2), toArr(labels2));
+        TreeEditDistance dist = new TreeEditDistance(new ScoreImpl(t1, t2));
+        Mapping map = new Mapping(t1, t2);
+        double d = dist.calc(t1, t2, map);
         //System.out.println("DISTANCE = " + d);
 
         //RETURN DISTANCE
@@ -106,7 +105,7 @@ public class TreeEditDistComparison implements ComparisonMetric
 
     private AstRoot getAST(String code)
     {
-	CompilerEnvirons comEnvs = new CompilerEnvirons();
+        CompilerEnvirons comEnvs = new CompilerEnvirons();
         ErrorReporter errReporter = comEnvs.getErrorReporter();
         Parser parse = new Parser(comEnvs, errReporter);
 
@@ -119,7 +118,7 @@ public class TreeEditDistComparison implements ComparisonMetric
 
         for(int i = 0; i < list.size(); i++)
         {
-  	    arr[i] = list.get(i);
+         arr[i] = list.get(i);
         }
         
         return arr;
@@ -131,32 +130,32 @@ public class TreeEditDistComparison implements ComparisonMetric
         public Iterator<Node> itr;
     }
 
-    class ScoreImpl implements EditScore {
-	private final LabeledTree tree1, tree2;
+    protected class ScoreImpl implements EditScore {
+      private final LabeledTree tree1, tree2;
 
-	public ScoreImpl(LabeledTree tree1, LabeledTree tree2) {
-		this.tree1 = tree1;
-		this.tree2 = tree2;
-	}
+      public ScoreImpl(LabeledTree tree1, LabeledTree tree2) {
+         this.tree1 = tree1;
+         this.tree2 = tree2;
+      }
 
-	@Override
-	public double replace(int node1, int node2) {
-		if (tree1.getLabel(node1) == tree2.getLabel(node2)) {
-			return 0;
-		} else {
-			return 1;
-		}
-	}
+      @Override
+      public double replace(int node1, int node2) {
+         if (tree1.getLabel(node1) == tree2.getLabel(node2)) {
+            return 0;
+         } else {
+            return 1;
+         }
+      }
 
-	@Override
-	public double insert(int node2) {
-		return 1;
-	}
+      @Override
+      public double insert(int node2) {
+         return 1;
+      }
 
-	@Override
-	public double delete(int node1) {
-		return 1;
-	}
-    }   
+      @Override
+      public double delete(int node1) {
+         return 1;
+      }
+   }   
 }
 
